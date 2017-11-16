@@ -37,7 +37,7 @@ Due to the size of code and dependencies (and AWS Lambda's 50MB package limits),
 [`ocr`](functions/ocr) supports extracting text from images and "image" PDFs, while [`simple`](functions/simple) handles text extraction from the remaining formats.
 The side benefit of splitting into two functions is that we can configure the memory requirements of the two functions independently.
 
-We use [apex](http://apex.run/) for our development toolchain to deploy the AWS Lambda functions; the code for the two Lambda functions are found in the [functions](functions) directory.
+ [apex](http://apex.run/) for development toolchain to deploy the AWS Lambda functions; the code for the two Lambda functions are found in the [functions](functions) directory.
 To deploy to AWS (*Note* that the `-D` argument refers to dry run mode.)
 
     apex -D deploy
@@ -47,7 +47,7 @@ Generally, we would advice using a specific bucket with auto-delete lifecycle ru
 You can set the IAM role and other configuration options in [project.json](project.json).
 
 The speed of parsing depends on CPU and this is controlled by the amount of memory allocated to your Lambda functions.
-For our needs, we find that 512MB for `simple` and 1024MB for `ocr` is a good balance between performance and cost.
+ 512MB for `simple` and 1024MB for `ocr` is a good balance between performance and cost.
 
 ## Usage
 
@@ -115,7 +115,7 @@ For step 2 and 3, it is done concurrently and asynchronously and we set a timeou
 
 where `REMAINING_TIME` is the amount of time remaining after step 1.
 
-Based on our experience, merging searchable PDFs take quite a while (and depends on the number of pages you have).
+merging searchable PDFs take quite a while (and depends on the number of pages you have).
 On average, it can take about 60 seconds for merging 100 pages of searchable PDFs.
 If this is an issue for you, you might want to modify the code to fix the path of the intermediate outputs and combine it yourself outside the Lambda infrastructure.
 Currently, we use random UUIDs for the filenames of each intermediate output page.
@@ -130,3 +130,13 @@ If anybody knows of a better pattern for processing PDFs, do feel free to submit
 ## Building Binaries
 
 For more information on how we prepped the Lambda execution environment to run all these external software and libraries, see [Building Binaries](BuildingBinaries.md).
+
+
+docker run -v $PWD:/var/task lambci/lambda:python3.6 main.handle
+
+docker run -e "LAMBDA_FUNCTION_NAME=ocr" -e "AWS_ACCESS_KEY_ID=AKIAIRYQCT2DCCQYWD4Q" -e "AWS_SECRET_ACCESS_KEY=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" -v /home/john/projects/lambda-text-extractor/functions/ocr:/var/task lambci/lambda:python3.6 main.handle '{"document_uri": "https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf", "temp_uri_prefix": "s3://mavendc-utils/", "text_uri": "s3://mavendc-utils/tracemonkey.txt", "searchable_pdf_uri": "s3://mavendc-utils/tracemonkey.searchable.pdf"}'
+
+docker run --entrypoint /bin/sh -it -e "LAMBDA_FUNCTION_NAME=ocr" -e "AWS_ACCESS_KEY_ID=AKIAIRYQCT2DCCQYWD4Q" -e "AWS_SECRET_ACCESS_KEY=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" -v /home/john/projects/lambda-text-extractor/functions/ocr:/var/task lambci/lambda:python3.6 
+
+
+apex invoke ocr > test2.json

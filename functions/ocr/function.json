@@ -5,6 +5,7 @@
     "memory": 1024,
     "environment": {
         "MERGE_SEARCHABLE_PDF_DURATION": "15",
-        "LOG_LEVEL": "DEBUG"
-    }
+        "LOG_LEVEL": "TRACE"
+    },
+    "profile": "default"
 }

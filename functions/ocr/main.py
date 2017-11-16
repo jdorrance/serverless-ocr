@@ -50,6 +50,7 @@ def handle(event, context):
 
     # AWS Lambda auto-retries errors for 3x. This should make it disable retrying...kinda. See https://stackoverflow.com/questions/32064038/aws-lambda-function-triggering-multiple-times-for-a-single-event
     aws_context_retry_uri = os.path.join(temp_uri_prefix, 'aws_lambda_request_ids', context.aws_request_id)
+    logger.error(aws_context_retry_uri)
     if uri_exists(aws_context_retry_uri):
         return
     uri_dump(aws_context_retry_uri, '', mode='w')
@@ -63,21 +64,23 @@ def handle(event, context):
     ext = ext.lower()
 
     extract_func = PARSE_FUNCS.get(ext)
+    logger.error(ext)
+    logger.error(extract_func)
     if extract_func is None:
         raise ValueError('<{}> has unsupported extension "{}".'.format(document_uri, ext))
 
-    with NamedTemporaryFile(mode='wb', suffix=ext, delete=False) as f:
-        document_path = f.name
-        f.write(uri_read(document_uri, mode='rb'))
-        logger.debug('Downloaded <{}> to <{}>.'.format(document_uri, document_path))
-    #end with
+    logger.error(document_uri)
+    f = NamedTemporaryFile(delete=False, suffix=ext)
+    document_path = f.name
+    f.write(uri_read(document_uri, mode='rb'))
+    f.close()
+    logger.error('Downloaded <{}> to <{}>.'.format(document_uri, document_path))
 
     textractor_results = {}
     searchable_pdf_path = None
 
     try:
         textractor_results = extract_func(document_path, event, context, create_searchable_pdf=create_searchable_pdf)
-
         meta = textractor_results.pop('meta', {})
         meta['method'] = textractor_results['method']
 
@@ -85,7 +88,7 @@ def handle(event, context):
         textractor_results['size'] = len(text)
 
         uri_dump(text_uri, text, mode='w', textio_args={'errors': 'ignore'}, storage_args=dict(ContentType='text/plain', Metadata=meta))
-        if len(text) == 0: logger.warning('<{}> does not contain any content.'.format(document_uri))
+        if len(text) == 0: logger.error('<{}> does not contain any content.'.format(document_uri))
 
         searchable_pdf_path = textractor_results.pop('searchable_pdf_path', None)
         if searchable_pdf_path:
@@ -107,12 +110,13 @@ def handle(event, context):
         else: logger.debug('Extracted pages of <{}> to <{}> (took {:.3f} seconds).'.format(document_uri, text_uri, time.time() - start_time))
 
     except Exception as e:
+        #logger.error(e)
         logger.exception('Extraction exception for <{}>'.format(document_uri))
         textractor_results = dict(success=False, reason=str(e))
         uri_dump(text_uri, '', mode='w', textio_args={'errors': 'ignore'}, storage_args=dict(ContentType='text/plain', Metadata=dict(Exception=str(e))))
 
     finally:
-        os.remove(document_path)
+        #os.remove(document_path)
         if searchable_pdf_path: os.remove(searchable_pdf_path)
     #end try
 
@@ -140,7 +144,8 @@ def handle(event, context):
 
 def _pdf_to_text(document_path):
     text_path = document_path + '.txt'
-    _get_subprocess_output([os.path.join(BIN_DIR, 'pdftotext'), '-layout', '-nopgbrk', '-eol', 'unix', document_path, text_path], shell=False, env=dict(LD_LIBRARY_PATH=os.path.join(LIB_DIR, 'pdftotext')))
+    _get_subprocess_output([os.path.join(BIN_DIR, 'pdftotext'), '-layout', '-nopgbrk', '-eol', 'unix', document_path, text_path], shell=False)
+    #_get_subprocess_output([os.path.join(BIN_DIR, 'pdftotext'), '-nopgbrk', '-eol', 'unix', document_path, text_path], shell=False)
 
     with io.open(text_path, mode='r', encoding='utf-8', errors='ignore') as f:
         text = f.read().strip()
@@ -168,7 +173,7 @@ def pdf_to_text_with_ocr(document_path, event, context, create_searchable_pdf=Tr
         return pdf_to_text_with_ocr_single_page(document_path, event, context, create_searchable_pdf=create_searchable_pdf)
 
     # This is more reliable than using PyPDF2
-    pdfinfo_output = _get_subprocess_output([os.path.join(BIN_DIR, 'pdfinfo'), document_path], shell=False, env=dict(LD_LIBRARY_PATH=os.path.join(LIB_DIR, 'pdftotext')))
+    pdfinfo_output = _get_subprocess_output([os.path.join(BIN_DIR, 'pdfinfo'), document_path], shell=False)
     pdfinfo_output = pdfinfo_output.decode('ascii', errors='ignore')
     m = re.search(r'^Pages\:(.+)$', pdfinfo_output, flags=re.M | re.U)
     if not m: raise Exception('Unable to get page count from pdfinfo:\n{}'.format(pdfinfo_output))
@@ -245,7 +250,7 @@ def pdf_to_text_with_ocr(document_path, event, context, create_searchable_pdf=Tr
 
                     with NamedTemporaryFile(suffix='.pdf', delete=False) as f:
                         original_pdf_page_fname = f.name
-                    _get_subprocess_output([os.path.join(BIN_DIR, 'pdfseparate'), '-f', str(page), '-l', str(page), document_path, original_pdf_page_fname], shell=False, env=dict(LD_LIBRARY_PATH=os.path.join(LIB_DIR, 'pdftotext')))
+                    _get_subprocess_output([os.path.join(BIN_DIR, 'pdfseparate'), '-f', str(page), '-l', str(page), document_path, original_pdf_page_fname], shell=False, )
                     pdf_pages_filenames.append(original_pdf_page_fname)
 
                 else:
@@ -328,7 +333,7 @@ def image_to_text(document_path, event, context, create_searchable_pdf=True):
     if create_searchable_pdf:
         cmdline += ['pdf']
 
-    _get_subprocess_output(cmdline, shell=False, env=dict(LD_LIBRARY_PATH=os.path.join(LIB_DIR, 'tesseract')))
+    _get_subprocess_output(cmdline, shell=False)
 
     if create_searchable_pdf:
         searchable_pdf_path = document_path + '.pdf'
